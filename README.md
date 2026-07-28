@@ -27,7 +27,7 @@ mlops_pipeline/
 │   ├── model_deploy.py                 # Despliegue del modelo
 │   └── model_monitoring.py             # Monitoreo en producción
 │
-├── base_de_datos.csv                   # Fuente de datos histórica
+├── base_de_datos.xlsx                  # Fuente de datos histórica
 ├── requirements.txt                    # Dependencias del proyecto
 ├── .gitignore
 └── README.md
