@@ -1,0 +1,44 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+
+# --- Entornos virtuales ---
+venv/
+.venv/
+env/
+ENV/
+
+# --- Jupyter Notebook ---
+.ipynb_checkpoints/
+
+# --- Artefactos de modelo y datos pesados (no versionar en Git) ---
+*.pkl
+*.joblib
+*.h5
+*.parquet
+/artifacts/
+/models/
+
+# --- Logs y tracking de experimentos ---
+mlruns/
+logs/
+*.log
+
+# --- Configuración de IDE ---
+.vscode/
+.idea/
+
+# --- Sistema operativo ---
+.DS_Store
+Thumbs.db
+
+# --- Variables de entorno / credenciales ---
+.env
+*.env
+secrets.yaml

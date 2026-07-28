@@ -1,0 +1,4 @@
+id_usuario,edad,ingreso_mensual,monto_credito,plazo_meses,score_historico,mora_historica,default
+# NOTA: este archivo es un PLACEHOLDER estructural creado en V1.0.0.
+# Debe ser reemplazado por el dataset real de histórico de créditos
+# antes de ejecutar cargar_datos.ipynb en V1.0.1.
