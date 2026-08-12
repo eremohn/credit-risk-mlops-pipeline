@@ -1,15 +1,31 @@
-pandas
-numpy
-openpyxl
-python-dotenv
-db-dtypes
-jupyter
-notebook
-ipykernel
-seaborn
-ipywidgets
-scikit-learn
-xgboost
-pydantic
-fastapi
-uvicorn[standard]
+# Núcleo de datos y ML
+pandas==3.0.2
+numpy==2.4.4
+scikit-learn==1.8.0
+scipy==1.17.1
+
+# Modelos de boosting
+xgboost==3.4.0
+lightgbm==4.7.0
+catboost==1.2.10
+
+# Optimización de hiperparámetros
+optuna==4.9.0
+
+# Persistencia de modelos
+joblib==1.5.3
+
+# Visualización
+matplotlib==3.10.8
+
+# Despliegue (API REST)
+fastapi==0.141.1
+uvicorn==0.52.1
+pydantic==2.13.4
+python-multipart==0.0.32
+
+# Dashboard
+streamlit==1.61.1
+
+# Configuración
+pyyaml==6.0.3
