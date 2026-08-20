@@ -211,12 +211,50 @@ def _corregir_edad(dataframe: pd.DataFrame) -> pd.DataFrame:
     return dataframe
 
 
+def calculate_winsorize_bounds(
+    dataframe: pd.DataFrame,
+    columnas: list[str] = COLUMNAS_WINSORIZAR,
+    percentil_inferior: float = PERCENTIL_WINSORIZAR_INFERIOR,
+    percentil_superior: float = PERCENTIL_WINSORIZAR_SUPERIOR,
+) -> dict[str, tuple[float, float]]:
+    """Calcula los límites de winsorización de referencia (p.ej. de entrenamiento).
+
+    Estos límites deben calcularse una única vez sobre el dataset de
+    entrenamiento y reutilizarse tal cual en inferencia. Recalcularlos
+    sobre cada lote de solicitudes entrantes produciría *train/serve
+    skew*: un lote pequeño (o de una sola solicitud) generaría límites
+    de recorte arbitrarios en lugar de reflejar la distribución con la
+    que el modelo fue entrenado.
+
+    Args:
+        dataframe: Dataset de referencia (normalmente el de entrenamiento).
+        columnas: Columnas numéricas a winsorizar.
+        percentil_inferior: Percentil inferior de corte (0-1).
+        percentil_superior: Percentil superior de corte (0-1).
+
+    Returns:
+        Diccionario `{columna: (limite_inferior, limite_superior)}`.
+    """
+    return {
+        columna: (
+            float(dataframe[columna].quantile(percentil_inferior)),
+            float(dataframe[columna].quantile(percentil_superior)),
+        )
+        for columna in columnas
+    }
+
+
 def winsorize_column(
     serie: pd.Series,
     percentil_inferior: float = PERCENTIL_WINSORIZAR_INFERIOR,
     percentil_superior: float = PERCENTIL_WINSORIZAR_SUPERIOR,
 ) -> pd.Series:
-    """Recorta una serie numérica a sus percentiles p1-p99.
+    """Recorta una serie numérica a sus propios percentiles p1-p99.
+
+    Uso exclusivo en contexto de entrenamiento (recalcula los límites a
+    partir de la propia serie). Para aplicar límites ya calculados sobre
+    un dataset de referencia — el caso correcto en inferencia — usar
+    `apply_winsorize_bounds`.
 
     Args:
         serie: Serie numérica a winsorizar.
@@ -231,7 +269,24 @@ def winsorize_column(
     return serie.clip(lower=limite_inferior, upper=limite_superior)
 
 
-def clean_data(dataframe: pd.DataFrame) -> pd.DataFrame:
+def apply_winsorize_bounds(serie: pd.Series, limites: tuple[float, float]) -> pd.Series:
+    """Recorta una serie a límites ya calculados (uso en inferencia).
+
+    Args:
+        serie: Serie numérica a recortar.
+        limites: Tupla `(limite_inferior, limite_superior)` obtenida con
+            `calculate_winsorize_bounds` sobre el dataset de entrenamiento.
+
+    Returns:
+        Serie recortada a los límites dados.
+    """
+    limite_inferior, limite_superior = limites
+    return serie.clip(lower=limite_inferior, upper=limite_superior)
+
+
+def clean_data(
+    dataframe: pd.DataFrame, medianas_referencia: dict[str, float] | None = None
+) -> tuple[pd.DataFrame, dict[str, float]]:
     """Aplica la limpieza determinística documentada en el EDA.
 
     Corrige inconsistencias (puntajes negativos, categorías espurias,
@@ -240,9 +295,16 @@ def clean_data(dataframe: pd.DataFrame) -> pd.DataFrame:
 
     Args:
         dataframe: DataFrame crudo tal como retorna `load_data`.
+        medianas_referencia: Medianas ya calculadas sobre el dataset de
+            entrenamiento, en formato `{columna: mediana}`. Si se
+            proveen, se usan directamente para imputar (caso de
+            inferencia, evita *train/serve skew*). Si es ``None``, las
+            medianas se calculan a partir del propio `dataframe` (caso
+            de entrenamiento, comportamiento histórico de esta función).
 
     Returns:
-        DataFrame limpio, sin nulos remanentes en las columnas fuente.
+        Tupla `(dataframe_limpio, medianas_utilizadas)`. `medianas_utilizadas`
+        debe persistirse en entrenamiento y reutilizarse en inferencia.
     """
     try:
         df_limpio = dataframe.copy()
@@ -254,8 +316,12 @@ def clean_data(dataframe: pd.DataFrame) -> pd.DataFrame:
             df_limpio["promedio_ingresos_datacredito"].isna().astype(int)
         )
 
-        for columna in ("puntaje", "puntaje_datacredito", "promedio_ingresos_datacredito"):
-            df_limpio[columna] = df_limpio[columna].fillna(df_limpio[columna].median())
+        columnas_a_imputar = ("puntaje", "puntaje_datacredito", "promedio_ingresos_datacredito")
+        medianas_utilizadas = dict(medianas_referencia) if medianas_referencia else {}
+        for columna in columnas_a_imputar:
+            if columna not in medianas_utilizadas:
+                medianas_utilizadas[columna] = float(df_limpio[columna].median())
+            df_limpio[columna] = df_limpio[columna].fillna(medianas_utilizadas[columna])
 
         columnas_saldo_presentes = [
             columna for columna in COLUMNAS_FUGA_INFORMACION if columna in df_limpio.columns
@@ -268,13 +334,15 @@ def clean_data(dataframe: pd.DataFrame) -> pd.DataFrame:
         raise ValueError(mensaje) from error
 
     logger.info("Limpieza aplicada. Nulos remanentes: %d", int(df_limpio.isna().sum().sum()))
-    return df_limpio
+    return df_limpio, medianas_utilizadas
 
 
 # ---------------------------------------------------------------------
 # Funciones: ingeniería de variables
 # ---------------------------------------------------------------------
-def generate_features(dataframe: pd.DataFrame) -> pd.DataFrame:
+def generate_features(
+    dataframe: pd.DataFrame, limites_winsorizacion: dict[str, tuple[float, float]] | None = None
+) -> tuple[pd.DataFrame, dict[str, tuple[float, float]]]:
     """Genera las variables derivadas prototipadas en el EDA.
 
     Crea razones financieras, componentes temporales de la fecha de
@@ -285,10 +353,17 @@ def generate_features(dataframe: pd.DataFrame) -> pd.DataFrame:
 
     Args:
         dataframe: DataFrame limpio, salida de `clean_data`.
+        limites_winsorizacion: Límites ya calculados sobre el dataset de
+            entrenamiento, en formato `{columna: (p1, p99)}`. Si se
+            proveen, se aplican directamente (caso de inferencia, evita
+            *train/serve skew*). Si es ``None``, los límites se calculan
+            a partir del propio `dataframe` (caso de entrenamiento).
 
     Returns:
-        DataFrame enriquecido con las variables derivadas del modelo,
-        sin columnas de fuga de información ni la fecha cruda.
+        Tupla `(dataframe_enriquecido, limites_utilizados)`. `dataframe_enriquecido`
+        no contiene columnas de fuga de información ni la fecha cruda.
+        `limites_utilizados` debe persistirse en entrenamiento y
+        reutilizarse en inferencia.
     """
     try:
         df_feat = dataframe.copy()
@@ -309,8 +384,11 @@ def generate_features(dataframe: pd.DataFrame) -> pd.DataFrame:
             labels=["alto_riesgo", "riesgo_medio", "riesgo_bajo", "riesgo_muy_bajo"],
         ).astype(object).fillna("sin_clasificar")
 
+        limites_utilizados = dict(limites_winsorizacion) if limites_winsorizacion else (
+            calculate_winsorize_bounds(df_feat, COLUMNAS_WINSORIZAR)
+        )
         for columna in COLUMNAS_WINSORIZAR:
-            df_feat[columna] = winsorize_column(df_feat[columna])
+            df_feat[columna] = apply_winsorize_bounds(df_feat[columna], limites_utilizados[columna])
         for columna in COLUMNAS_LOG:
             df_feat[columna] = np.log1p(df_feat[columna].clip(lower=0))
 
@@ -329,7 +407,7 @@ def generate_features(dataframe: pd.DataFrame) -> pd.DataFrame:
     logger.info(
         "Variables derivadas generadas. Shape resultante: %d x %d", *df_feat.shape
     )
-    return df_feat
+    return df_feat, limites_utilizados
 
 
 def select_features(
@@ -376,19 +454,24 @@ def select_features(
 
 def prepare_dataset(
     dataframe: pd.DataFrame,
-) -> tuple[pd.DataFrame, pd.Series, list[str], list[str]]:
+) -> tuple[pd.DataFrame, pd.Series, list[str], list[str], dict[str, Any]]:
     """Orquesta limpieza, generación y selección de variables.
 
     Args:
         dataframe: DataFrame crudo, salida de `load_data`.
 
     Returns:
-        Tupla `(X, y, columnas_numericas, columnas_categoricas)` lista
-        para dividir en train/test y alimentar el pipeline de
-        preprocesamiento.
+        Tupla `(X, y, columnas_numericas, columnas_categoricas,
+        estadisticas_preprocesamiento)` lista para dividir en train/test
+        y alimentar el pipeline de preprocesamiento.
+        `estadisticas_preprocesamiento` contiene `medianas_referencia` y
+        `limites_winsorizacion`: deben persistirse junto con el modelo y
+        reutilizarse tal cual en `model_deploy.py` para evitar
+        *train/serve skew* (ver docstrings de `clean_data` y
+        `generate_features`).
     """
-    df_limpio = clean_data(dataframe)
-    df_features = generate_features(df_limpio)
+    df_limpio, medianas_referencia = clean_data(dataframe)
+    df_features, limites_winsorizacion = generate_features(df_limpio)
 
     columnas_numericas = select_features(df_features, COLUMNAS_NUMERICAS_MODELO)
     columnas_categoricas = COLUMNAS_CATEGORICAS_MODELO
@@ -397,13 +480,18 @@ def prepare_dataset(
     X = df_features[columnas_predictoras]
     y = df_features[VARIABLE_OBJETIVO]
 
+    estadisticas_preprocesamiento = {
+        "medianas_referencia": medianas_referencia,
+        "limites_winsorizacion": limites_winsorizacion,
+    }
+
     logger.info(
         "Dataset preparado: %d predictoras (%d numéricas, %d categóricas)",
         len(columnas_predictoras),
         len(columnas_numericas),
         len(columnas_categoricas),
     )
-    return X, y, columnas_numericas, columnas_categoricas
+    return X, y, columnas_numericas, columnas_categoricas, estadisticas_preprocesamiento
 
 
 # ---------------------------------------------------------------------
@@ -581,7 +669,7 @@ def main() -> None:
     """
     try:
         dataframe_crudo = load_data()
-        X, y, columnas_numericas, columnas_categoricas = prepare_dataset(dataframe_crudo)
+        X, y, columnas_numericas, columnas_categoricas, _ = prepare_dataset(dataframe_crudo)
         X_train, X_test, y_train, y_test = split_dataset(X, y)
         preprocesador = create_preprocessing_pipeline(columnas_numericas, columnas_categoricas)
         preprocesador.fit(X_train)

@@ -1,0 +1,227 @@
+{
+  "n_referencia": 8610,
+  "n_produccion": 2153,
+  "resumen_ejecutivo": {
+    "variables_con_drift_severo": [],
+    "variables_con_drift_moderado": [],
+    "drift_prediccion": "sin_drift",
+    "drift_target": "sin_drift"
+  },
+  "drift_predicciones": {
+    "psi": 0.01701188121572999,
+    "ks_estadistico": 0.055483233022231356,
+    "ks_p_value": 4.754289778998763e-05,
+    "distancia_js": 0.05533459420166678,
+    "severidad": "sin_drift",
+    "media_referencia": 0.9523923970836238,
+    "media_produccion": 0.953852117061615
+  },
+  "drift_target": {
+    "psi": 3.5776171561040166e-07,
+    "chi_cuadrado_estadistico": 0.0,
+    "chi_cuadrado_p_value": 1.0,
+    "severidad": "sin_drift",
+    "tasa_positivos_referencia": 0.9524970963995354,
+    "tasa_positivos_produccion": 0.9526242452392011
+  },
+  "drift_variables": [
+    {
+      "variable": "salario_cliente",
+      "tipo": "numerica",
+      "psi": 0.034182978013391346,
+      "estadistico_prueba": 0.052464243771891635,
+      "p_value": 0.0001464653655317256,
+      "distancia_js": 0.07832798876211815,
+      "severidad": "sin_drift"
+    },
+    {
+      "variable": "puntaje_datacredito",
+      "tipo": "numerica",
+      "psi": 0.008626005024915347,
+      "estadistico_prueba": 0.02477778622919266,
+      "p_value": 0.2363385179306944,
+      "distancia_js": 0.03942753673678701,
+      "severidad": "sin_drift"
+    },
+    {
+      "variable": "total_otros_prestamos",
+      "tipo": "numerica",
+      "psi": 0.008354837533814984,
+      "estadistico_prueba": 0.03921675883204324,
+      "p_value": 0.009704729762610952,
+      "distancia_js": 0.03879693001241942,
+      "severidad": "sin_drift"
+    },
+    {
+      "variable": "ratio_cuota_salario",
+      "tipo": "numerica",
+      "psi": 0.007969560761277066,
+      "estadistico_prueba": 0.016139864802536288,
+      "p_value": 0.752985506124217,
+      "distancia_js": 0.037890161872559114,
+      "severidad": "sin_drift"
+    },
+    {
+      "variable": "huella_consulta",
+      "tipo": "numerica",
+      "psi": 0.007299186140072892,
+      "estadistico_prueba": 0.03413830362840819,
+      "p_value": 0.035125906050596956,
+      "distancia_js": 0.036268956126243285,
+      "severidad": "sin_drift"
+    },
+    {
+      "variable": "promedio_ingresos_datacredito",
+      "tipo": "numerica",
+      "psi": 0.006555421305072938,
+      "estadistico_prueba": 0.0275555325389363,
+      "p_value": 0.14308959604337634,
+      "distancia_js": 0.034372126675601654,
+      "severidad": "sin_drift"
+    },
+    {
+      "variable": "capital_prestado",
+      "tipo": "numerica",
+      "psi": 0.004885354497060337,
+      "estadistico_prueba": 0.019489699972973454,
+      "p_value": 0.5218013772343768,
+      "distancia_js": 0.029675397658767363,
+      "severidad": "sin_drift"
+    },
+    {
+      "variable": "creditos_sectorFinanciero",
+      "tipo": "numerica",
+      "psi": 0.004430290912941575,
+      "estadistico_prueba": 0.027839446133828334,
+      "p_value": 0.13538844320187518,
+      "distancia_js": 0.02826219065601206,
+      "severidad": "sin_drift"
+    },
+    {
+      "variable": "cuota_pactada",
+      "tipo": "numerica",
+      "psi": 0.004091255954031895,
+      "estadistico_prueba": 0.019570024377836507,
+      "p_value": 0.5167949067183876,
+      "distancia_js": 0.027158466771087537,
+      "severidad": "sin_drift"
+    },
+    {
+      "variable": "total_creditos_sector",
+      "tipo": "numerica",
+      "psi": 0.003924082175576964,
+      "estadistico_prueba": 0.02716750470537019,
+      "p_value": 0.1538870085618854,
+      "distancia_js": 0.02659792145613163,
+      "severidad": "sin_drift"
+    },
+    {
+      "variable": "edad_cliente",
+      "tipo": "numerica",
+      "psi": 0.0026017977296818717,
+      "estadistico_prueba": 0.017652542194587895,
+      "p_value": 0.6485023406970889,
+      "distancia_js": 0.02165680044694304,
+      "severidad": "sin_drift"
+    },
+    {
+      "variable": "plazo_meses",
+      "tipo": "numerica",
+      "psi": 0.002541506173100044,
+      "estadistico_prueba": 0.024507844441459477,
+      "p_value": 0.2473098461206789,
+      "distancia_js": 0.021406986464494328,
+      "severidad": "sin_drift"
+    },
+    {
+      "variable": "creditos_sectorReal",
+      "tipo": "numerica",
+      "psi": 0.002257915770754283,
+      "estadistico_prueba": 0.013281794087929599,
+      "p_value": 0.916804052894065,
+      "distancia_js": 0.020173617730145955,
+      "severidad": "sin_drift"
+    },
+    {
+      "variable": "tendencia_ingresos",
+      "tipo": "categorica",
+      "psi": 0.0014446543949551626,
+      "estadistico_prueba": 2.4652853495487763,
+      "p_value": 0.48159747790092966,
+      "distancia_js": 0.01613985797588926,
+      "severidad": "sin_drift"
+    },
+    {
+      "variable": "puntaje",
+      "tipo": "numerica",
+      "psi": 0.0012785625712878976,
+      "estadistico_prueba": 0.013496549934645389,
+      "p_value": 0.9073180361400678,
+      "distancia_js": 0.015181201343332092,
+      "severidad": "sin_drift"
+    },
+    {
+      "variable": "creditos_sectorCooperativo",
+      "tipo": "numerica",
+      "psi": 0.0010242357527186178,
+      "estadistico_prueba": 0.006516580327371849,
+      "p_value": 0.9999992440049862,
+      "distancia_js": 0.013586156540704556,
+      "severidad": "sin_drift"
+    },
+    {
+      "variable": "tipo_laboral",
+      "tipo": "categorica",
+      "psi": 0.0006978246576759084,
+      "estadistico_prueba": 1.1427980695924136,
+      "p_value": 0.285061856813934,
+      "distancia_js": 0.011217788440780413,
+      "severidad": "sin_drift"
+    },
+    {
+      "variable": "categoria_riesgo_score",
+      "tipo": "categorica",
+      "psi": 0.00039136265061583185,
+      "estadistico_prueba": 0.6121914909008509,
+      "p_value": 0.9616993479328105,
+      "distancia_js": 0.008380104567440847,
+      "severidad": "sin_drift"
+    },
+    {
+      "variable": "tipo_credito",
+      "tipo": "numerica",
+      "psi": 0.00020318799718442262,
+      "estadistico_prueba": 0.014579931414070959,
+      "p_value": 0.8509431203591281,
+      "distancia_js": 0.00605107357902344,
+      "severidad": "sin_drift"
+    },
+    {
+      "variable": "trimestre_prestamo",
+      "tipo": "numerica",
+      "psi": 0.00010636310838126201,
+      "estadistico_prueba": 0.006364886421075743,
+      "p_value": 0.9999996383663486,
+      "distancia_js": 0.004379617238153644,
+      "severidad": "sin_drift"
+    },
+    {
+      "variable": "edad_atipica",
+      "tipo": "numerica",
+      "psi": 0.0,
+      "estadistico_prueba": 0.0005838489145955755,
+      "p_value": 1.0,
+      "distancia_js": 0.0,
+      "severidad": "sin_drift"
+    },
+    {
+      "variable": "sin_promedio_ingresos",
+      "tipo": "numerica",
+      "psi": 0.0,
+      "estadistico_prueba": 0.015739753243859823,
+      "p_value": 0.779506523938711,
+      "distancia_js": 0.0,
+      "severidad": "sin_drift"
+    }
+  ]
+}

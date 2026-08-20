@@ -1,0 +1,2 @@
+timestamp,n_referencia,n_produccion,drift_prediccion_psi,drift_prediccion_severidad,drift_target_psi,drift_target_severidad,n_variables_drift_severo,n_variables_drift_moderado
+2026-08-19T03:54:45.483153+00:00,8610,2153,0.01701188121572999,sin_drift,3.5776171561040166e-07,sin_drift,0,0

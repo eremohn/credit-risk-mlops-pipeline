@@ -114,6 +114,8 @@ RUTA_MEJOR_MODELO: Final[Path] = RUTA_ARTEFACTOS / "best_model.pkl"
 RUTA_METRICAS: Final[Path] = RUTA_ARTEFACTOS / "metrics.json"
 RUTA_FEATURE_IMPORTANCE: Final[Path] = RUTA_ARTEFACTOS / "feature_importance.csv"
 RUTA_GRAFICOS: Final[Path] = RUTA_ARTEFACTOS / "graficos"
+RUTA_ESTADISTICAS_PREPROCESAMIENTO: Final[Path] = RUTA_ARTEFACTOS / "preprocessing_stats.json"
+RUTA_DATOS_REFERENCIA: Final[Path] = RUTA_ARTEFACTOS / "reference_data.csv"
 
 GRID_LOGISTIC_REGRESSION: Final[dict[str, list[Any]]] = {
     "clasificador__C": [0.001, 0.01, 0.1, 1.0, 10.0],
@@ -1417,7 +1419,9 @@ def main() -> None:
         RUTA_ARTEFACTOS.mkdir(parents=True, exist_ok=True)
 
         dataframe_crudo = load_data()
-        X, y, columnas_numericas, columnas_categoricas = prepare_dataset(dataframe_crudo)
+        X, y, columnas_numericas, columnas_categoricas, estadisticas_preprocesamiento = prepare_dataset(
+            dataframe_crudo
+        )
 
         X_train, X_test, y_train, y_test = split_dataset(X, y, ConfiguracionSplit(proporcion_test=0.2))
         X_tr, X_val, y_tr, y_val = split_dataset(
@@ -1513,6 +1517,27 @@ def main() -> None:
         with RUTA_METRICAS.open("w", encoding="utf-8") as archivo_metricas:
             json.dump(reporte_final, archivo_metricas, indent=2, ensure_ascii=False)
         logger.info("Métricas guardadas en %s", RUTA_METRICAS)
+
+        # Se persisten las estadísticas de referencia (medianas de imputación
+        # y límites de winsorización) calculadas sobre el set de
+        # entrenamiento. `model_deploy.py` las reutiliza tal cual en
+        # inferencia para evitar *train/serve skew* (ver docstrings de
+        # `ft_engineering.clean_data` / `generate_features`).
+        with RUTA_ESTADISTICAS_PREPROCESAMIENTO.open("w", encoding="utf-8") as archivo_stats:
+            json.dump(estadisticas_preprocesamiento, archivo_stats, indent=2, ensure_ascii=False)
+        logger.info("Estadísticas de preprocesamiento guardadas en %s", RUTA_ESTADISTICAS_PREPROCESAMIENTO)
+
+        # Instantánea de referencia (distribución de entrenamiento) para
+        # `model_monitoring.py`: variables ya generadas + target real +
+        # probabilidad predicha por el campeón sobre TODO `X_train` (unión
+        # de `X_tr` y `X_val`). Es la ventana de comparación contra la que
+        # se mide drift de producción.
+        etiquetas_train, probabilidades_train = predict(campeon.pipeline, X_train)
+        df_referencia = X_train.copy()
+        df_referencia[VARIABLE_OBJETIVO] = y_train.values
+        df_referencia["prediccion_proba"] = probabilidades_train
+        df_referencia.to_csv(RUTA_DATOS_REFERENCIA, index=False)
+        logger.info("Datos de referencia para monitoreo guardados en %s", RUTA_DATOS_REFERENCIA)
 
         # Los ensambles (Stacking/Blending) no exponen importancia nativa.
         # En ese caso se reporta, como referencia interpretativa, la del

@@ -1,0 +1,21 @@
+{
+  "medianas_referencia": {
+    "puntaje": 95.227787,
+    "puntaje_datacredito": 791.0,
+    "promedio_ingresos_datacredito": 1204496.0
+  },
+  "limites_winsorizacion": {
+    "salario_cliente": [
+      954263.0,
+      39553562.179999426
+    ],
+    "total_otros_prestamos": [
+      0.0,
+      17946059.99999993
+    ],
+    "promedio_ingresos_datacredito": [
+      32446.320000000003,
+      9443045.58
+    ]
+  }
+}

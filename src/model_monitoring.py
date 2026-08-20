@@ -32,6 +32,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Final
 
@@ -72,6 +73,8 @@ logger = logging.getLogger("model_monitoring")
 RUTA_ARTEFACTOS: Final[Path] = Path("../model_artifacts")
 RUTA_REPORTE_DRIFT: Final[Path] = RUTA_ARTEFACTOS / "drift_report.json"
 RUTA_TABLA_DRIFT_FEATURES: Final[Path] = RUTA_ARTEFACTOS / "feature_drift.csv"
+RUTA_HISTORICO_MONITOREO: Final[Path] = RUTA_ARTEFACTOS / "monitoring_history.csv"
+RUTA_SNAPSHOT_PRODUCCION: Final[Path] = RUTA_ARTEFACTOS / "latest_production_snapshot.csv"
 
 N_BINS_DRIFT: Final[int] = 10
 EPSILON_PROBABILIDAD: Final[float] = 1e-4
@@ -582,6 +585,35 @@ def generate_monitoring_report(
     return reporte
 
 
+def append_monitoring_history(reporte: dict[str, Any], ruta: Path = RUTA_HISTORICO_MONITOREO) -> None:
+    """Agrega una fila resumen de la corrida actual al histórico de monitoreo.
+
+    Este histórico es lo que permite al dashboard de Streamlit graficar
+    "drift temporal": cada ejecución de este script (típicamente un job
+    programado de Jenkins) añade una fila con timestamp, en lugar de
+    sobrescribir el reporte anterior.
+
+    Args:
+        reporte: Reporte de monitoreo retornado por `generate_monitoring_report`.
+        ruta: Ruta del archivo CSV histórico (se crea si no existe).
+    """
+    fila = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "n_referencia": reporte["n_referencia"],
+        "n_produccion": reporte["n_produccion"],
+        "drift_prediccion_psi": reporte["drift_predicciones"]["psi"],
+        "drift_prediccion_severidad": reporte["drift_predicciones"]["severidad"],
+        "drift_target_psi": reporte["drift_target"]["psi"] if reporte["drift_target"] else None,
+        "drift_target_severidad": reporte["drift_target"]["severidad"] if reporte["drift_target"] else "no_disponible",
+        "n_variables_drift_severo": len(reporte["resumen_ejecutivo"]["variables_con_drift_severo"]),
+        "n_variables_drift_moderado": len(reporte["resumen_ejecutivo"]["variables_con_drift_moderado"]),
+    }
+    historico_previo = pd.read_csv(ruta) if ruta.exists() else pd.DataFrame(columns=list(fila.keys()))
+    historico_actualizado = pd.concat([historico_previo, pd.DataFrame([fila])], ignore_index=True)
+    historico_actualizado.to_csv(ruta, index=False)
+    logger.info("Histórico de monitoreo actualizado (%d corridas registradas).", len(historico_actualizado))
+
+
 # =======================================================================
 # main
 # =======================================================================
@@ -610,9 +642,19 @@ def main() -> None:
         with RUTA_REPORTE_DRIFT.open("w", encoding="utf-8") as archivo_reporte:
             json.dump(reporte, archivo_reporte, indent=2, ensure_ascii=False)
         pd.DataFrame(reporte["drift_variables"]).to_csv(RUTA_TABLA_DRIFT_FEATURES, index=False)
+        append_monitoring_history(reporte)
+
+        # Snapshot de producción (variables + score + target real si existe):
+        # alimenta la pestaña "Distribuciones" del dashboard sin que este
+        # tenga que reconstruir el lote de producción por su cuenta.
+        df_snapshot = df_produccion.copy()
+        df_snapshot["prediccion_proba"] = proba_produccion.values
+        df_snapshot[VARIABLE_OBJETIVO] = y_produccion.values if y_produccion is not None else np.nan
+        df_snapshot.to_csv(RUTA_SNAPSHOT_PRODUCCION, index=False)
 
         logger.info("Reporte de monitoreo guardado en %s", RUTA_REPORTE_DRIFT)
         logger.info("Tabla de drift de variables guardada en %s", RUTA_TABLA_DRIFT_FEATURES)
+        logger.info("Snapshot de producción guardado en %s", RUTA_SNAPSHOT_PRODUCCION)
         logger.info("Resumen ejecutivo: %s", reporte["resumen_ejecutivo"])
 
     except Exception:

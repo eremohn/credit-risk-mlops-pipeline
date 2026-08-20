@@ -467,14 +467,64 @@ def pestana_distribuciones(df_referencia: pd.DataFrame | None, df_produccion: pd
         label="Producción", color=PALETA["amarillo"],
     )
     ax2.set_xlabel("Probabilidad de pago a tiempo")
+    ax2.set_ylabel("Densidad")
     ax2.legend()
     st.pyplot(fig2)
     plt.close(fig2)
 
 
-def pestana_simulador(estadisticas_preprocesamiento: dict[str, Any] | None) -> None:
+def _calcular_percentil(serie: pd.Series, valor: float) -> float:
+    """Calcula qué porcentaje de la serie de referencia es menor o igual al valor dado."""
+    return float((serie.dropna() <= valor).mean())
+
+
+def evaluar_representatividad(
+    df_referencia: pd.DataFrame | None, ratio_cuota_salario: float, capital_prestado: float
+) -> list[str]:
+    """Detecta si la solicitud simulada cae en una región poco representada en el histórico.
+
+    El modelo solo puede ser tan confiable como los datos con los que fue
+    entrenado. Un `ratio_cuota_salario` o `capital_prestado` en el extremo
+    de la distribución histórica (percentil > 99) significa que el modelo
+    vio muy pocos (o ningún) caso similar durante el entrenamiento, y su
+    predicción en esa región debe leerse con más cautela.
+
+    Args:
+        df_referencia: Variables generadas del conjunto de entrenamiento.
+        ratio_cuota_salario: Razón cuota/salario de la solicitud simulada.
+        capital_prestado: Capital solicitado (sin transformar) de la solicitud.
+
+    Returns:
+        Lista de advertencias en lenguaje natural (vacía si no hay alertas).
+    """
+    advertencias: list[str] = []
+    if df_referencia is None or df_referencia.empty:
+        return advertencias
+
+    if "ratio_cuota_salario" in df_referencia.columns:
+        percentil_ratio = _calcular_percentil(df_referencia["ratio_cuota_salario"], ratio_cuota_salario)
+        n_casos_similares = int((df_referencia["ratio_cuota_salario"] >= ratio_cuota_salario).sum())
+        if percentil_ratio >= 0.99:
+            advertencias.append(
+                f"La razón cuota/salario ({ratio_cuota_salario:.2f}) está en el percentil "
+                f"{percentil_ratio:.1%} del histórico — solo {n_casos_similares} de "
+                f"{len(df_referencia)} créditos de entrenamiento tuvieron una razón igual o mayor. "
+                "El modelo tiene poca evidencia para juzgar casos así de extremos."
+            )
+
+    return advertencias
+
+
+def pestana_simulador(
+    estadisticas_preprocesamiento: dict[str, Any] | None, df_referencia: pd.DataFrame | None
+) -> None:
     """Pestaña de simulador: evalúa una solicitud de crédito hipotética en vivo."""
     st.subheader("Simulador de solicitud de crédito")
+    st.caption(
+        "El modelo fue entrenado únicamente con créditos que fueron efectivamente originados "
+        "(no con solicitudes rechazadas). Para perfiles muy alejados de lo históricamente "
+        "aprobado, la predicción es menos confiable — el simulador te lo advierte cuando ocurre."
+    )
 
     if estadisticas_preprocesamiento is None:
         st.warning("No se encontraron estadísticas de preprocesamiento. Ejecute el entrenamiento primero.")
@@ -486,12 +536,17 @@ def pestana_simulador(estadisticas_preprocesamiento: dict[str, Any] | None) -> N
             capital_prestado = st.number_input("Capital solicitado", min_value=1.0, value=3_000_000.0, step=100_000.0)
             plazo_meses = st.number_input("Plazo (meses)", min_value=1, max_value=360, value=12)
             edad_cliente = st.number_input("Edad del cliente", min_value=18, max_value=100, value=35)
-            tipo_laboral = st.selectbox("Tipo laboral", ["Empleado", "Independiente", "Pensionado", "Rentista"])
+            tipo_laboral = st.selectbox("Tipo laboral", ["Empleado", "Independiente"])
+            tipo_credito = st.selectbox(
+                "Tipo de crédito", [4, 6, 7, 9, 10, 68],
+                help="Códigos de producto realmente observados en el histórico de créditos.",
+            )
         with col2:
             salario_cliente = st.number_input("Salario mensual", min_value=1.0, value=3_000_000.0, step=100_000.0)
             total_otros_prestamos = st.number_input("Otras deudas vigentes", min_value=0.0, value=500_000.0, step=50_000.0)
             cuota_pactada = st.number_input("Cuota mensual pactada", min_value=1.0, value=250_000.0, step=10_000.0)
             tendencia_ingresos = st.selectbox("Tendencia de ingresos", ["Estable", "Creciente", "Decreciente"])
+            cant_creditosvigentes = st.number_input("Créditos vigentes", min_value=0, value=2)
         with col3:
             puntaje_datacredito = st.number_input("Score central de riesgo", min_value=0.0, max_value=999.0, value=750.0)
             huella_consulta = st.number_input("Consultas recientes", min_value=0, value=2)
@@ -506,7 +561,7 @@ def pestana_simulador(estadisticas_preprocesamiento: dict[str, Any] | None) -> N
     solicitud_cruda = pd.DataFrame(
         [
             {
-                "tipo_credito": 1,
+                "tipo_credito": tipo_credito,
                 "fecha_prestamo": pd.Timestamp.now(),
                 "capital_prestado": capital_prestado,
                 "plazo_meses": plazo_meses,
@@ -517,7 +572,7 @@ def pestana_simulador(estadisticas_preprocesamiento: dict[str, Any] | None) -> N
                 "cuota_pactada": cuota_pactada,
                 "puntaje": puntaje_datacredito,
                 "puntaje_datacredito": puntaje_datacredito,
-                "cant_creditosvigentes": creditos_sectorFinanciero,
+                "cant_creditosvigentes": cant_creditosvigentes,
                 "huella_consulta": huella_consulta,
                 "creditos_sectorFinanciero": creditos_sectorFinanciero,
                 "creditos_sectorCooperativo": 0,
@@ -538,6 +593,8 @@ def pestana_simulador(estadisticas_preprocesamiento: dict[str, Any] | None) -> N
         )
         _, probabilidades = predict(pipeline, df_features)
         probabilidad = float(probabilidades[0])
+        ratio_cuota_salario = float(df_features["ratio_cuota_salario"].iloc[0])
+        categoria_riesgo_score = str(df_features["categoria_riesgo_score"].iloc[0])
     except Exception:
         logger.exception("Error al evaluar la solicitud del simulador.")
         st.error("No fue posible evaluar la solicitud. Revise los datos ingresados.")
@@ -547,6 +604,13 @@ def pestana_simulador(estadisticas_preprocesamiento: dict[str, Any] | None) -> N
     st.markdown("### Resultado")
     renderizar_semaforo(color, etiqueta)
     st.metric("Probabilidad de pago a tiempo", f"{probabilidad:.1%}")
+
+    columna_a, columna_b = st.columns(2)
+    columna_a.caption(f"Razón cuota/salario: **{ratio_cuota_salario:.2f}**")
+    columna_b.caption(f"Categoría de score externo: **{categoria_riesgo_score.replace('_', ' ')}**")
+
+    for advertencia in evaluar_representatividad(df_referencia, ratio_cuota_salario, capital_prestado):
+        st.warning(f"⚠ {advertencia}")
 
 
 # =======================================================================
@@ -581,7 +645,7 @@ def main() -> None:
     with tab_distribuciones:
         pestana_distribuciones(df_referencia, df_produccion)
     with tab_simulador:
-        pestana_simulador(estadisticas_preprocesamiento)
+        pestana_simulador(estadisticas_preprocesamiento, df_referencia)
 
 
 if __name__ == "__main__":
